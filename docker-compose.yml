@@ -8,6 +8,8 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - .:/app
+    environment:
+      - SERVER_ENVIRONMENT=${SERVER_ENVIRONMENT}
     env_file:
       - .env
     command: >
@@ -22,12 +24,16 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     environment:
-      POSTGRES_DB: 
-      POSTGRES_USER: 
-      POSTGRES_PASSWORD: 
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 10
     restart: always
+
+
+volumes:
+  db-data:
