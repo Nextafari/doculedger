@@ -7,6 +7,7 @@ Sequence Diagram Flows:
 3. Role-Based Approval: startApproval -> pending -> approve(A) -> pending -> approve(B) -> FullyApproved
 """
 
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -52,8 +53,8 @@ class UserRegistrationViewSet(viewsets.ViewSet):
     permission_classes = [AllowAny]
     serializer_class = UserSerializer
 
-    @action(detail=False, methods=["post"], url_path="register")
-    def register_user(self, request):
+    @swagger_auto_schema(tags=["api"], request_body=serializer_class)
+    def create(self, request):
         """
         Register a new user.
 
@@ -64,12 +65,22 @@ class UserRegistrationViewSet(viewsets.ViewSet):
             Response with registration status
         """
         serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        try:
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
-            {"message": "User registration not yet implemented"},
-            status=status.HTTP_501_NOT_IMPLEMENTED,
+            {
+                "status": "success",
+                "message": "User registration successful",
+                "data": serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 

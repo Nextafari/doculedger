@@ -10,7 +10,13 @@ Maps to sequence diagram flows:
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import DocumentViewSet, VerificationViewSet, ApprovalViewSet, AuditViewSet
+from .views import (
+    AuditViewSet,
+    ApprovalViewSet,
+    DocumentViewSet,
+    VerificationViewSet,
+    UserRegistrationViewSet
+    )
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -19,7 +25,7 @@ from rest_framework_simplejwt.views import (
 
 # Create router for ViewSets
 router = DefaultRouter()
-router.register(r"users", include("core.user_urls"))
+router.register(r"users", UserRegistrationViewSet, basename="user")
 router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"verification", VerificationViewSet, basename="verification")
 router.register(r"approvals", ApprovalViewSet, basename="approval")
@@ -27,8 +33,14 @@ router.register(r"audit", AuditViewSet, basename="audit")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "api/token/",
+        TokenObtainPairView.as_view(),
+        name="token_obtain_pair"),
+    path(
+        "api/token/refresh/",
+        TokenRefreshView.as_view(),
+        name="token_refresh"),
 ]
 
 # Available endpoints:
