@@ -26,6 +26,9 @@ from .models import (
     AuditEvent,
     Activity,
     Notification,
+    Permission,
+    RolePermission,
+    UserRole,
 )
 from .serializers import (
     DocumentSerializer,
@@ -67,7 +70,20 @@ class UserRegistrationViewSet(viewsets.ViewSet):
         serializer = self.serializer_class(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            user = serializer.save()
+
+            # Owner role/permission creation logic (only for direct registration)
+            role, _ = Role.objects.get_or_create(
+                name="owner",
+                defaults={"description": "Workspace owner role"},
+            )
+
+            permission, _ = Permission.objects.get_or_create(
+                name="manage_workspace",
+                defaults={"description": "Full workspace management permission"},
+            )
+            RolePermission.objects.get_or_create(role=role, permission=permission)
+            UserRole.objects.get_or_create(user=user, role=role)
         except Exception as e:
             return Response(
                 {"error": str(e)},

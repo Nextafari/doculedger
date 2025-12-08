@@ -15,8 +15,8 @@ from .views import (
     ApprovalViewSet,
     DocumentViewSet,
     VerificationViewSet,
-    UserRegistrationViewSet
-    )
+    UserRegistrationViewSet,
+)
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -33,14 +33,8 @@ router.register(r"audit", AuditViewSet, basename="audit")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path(
-        "api/token/",
-        TokenObtainPairView.as_view(),
-        name="token_obtain_pair"),
-    path(
-        "api/token/refresh/",
-        TokenRefreshView.as_view(),
-        name="token_refresh"),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 ]
 
 # Available endpoints:
