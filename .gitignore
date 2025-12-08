@@ -136,6 +136,8 @@ migrations/
 
 data/
 static/
+media/
+staticfiles/
 daphne_keys/
 
 todo.md
