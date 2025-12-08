@@ -6,6 +6,7 @@ djangorestframework_simplejwt==5.5.1
 drf-yasg==1.21.11
 inflection==0.5.1
 packaging==25.0
+phonenumbers>=9.0.20
 python-dotenv==1.2.1
 PyJWT==2.10.1
 pytz==2025.2

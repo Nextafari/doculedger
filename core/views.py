@@ -15,7 +15,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 
-from .models import (
+from core import logger
+from core.models import (
     Document,
     Project,
     User,
@@ -30,7 +31,7 @@ from .models import (
     RolePermission,
     UserRole,
 )
-from .serializers import (
+from core.serializers import (
     DocumentSerializer,
     DocumentUploadSerializer,
     VerifyDocumentSerializer,
@@ -42,8 +43,9 @@ from .serializers import (
     AuditEventSerializer,
     NotificationSerializer,
     UserSerializer,
+    ResetPasswordSerializer,
 )
-from .utils import HashService, IPFSService, RelayerService
+from core.utils import HashService, IPFSService, RelayerService
 
 
 class UserRegistrationViewSet(viewsets.ViewSet):
@@ -85,8 +87,9 @@ class UserRegistrationViewSet(viewsets.ViewSet):
             RolePermission.objects.get_or_create(role=role, permission=permission)
             UserRole.objects.get_or_create(user=user, role=role)
         except Exception as e:
+            logger.error(f"User registration failed: {str(e)}")
             return Response(
-                {"error": str(e)},
+                {"status": "error", "message": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -97,6 +100,44 @@ class UserRegistrationViewSet(viewsets.ViewSet):
                 "data": serializer.data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class ResetPasswordViewSet(viewsets.ViewSet):
+    """
+    User password management ViewSet.
+
+    Implements password reset and change flows.
+    """
+
+    permission_classes = [AllowAny]
+    serializer_class = ResetPasswordSerializer
+
+    @swagger_auto_schema(tags=["api"], request_body=serializer_class)
+    @action(detail=False, methods=["post"], url_path="reset-password")
+    def reset_password(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        new_password = serializer.validated_data["new_password"]
+
+        try:
+            user = User.objects.get(email=email)
+            user.set_password(new_password)
+            user.save()
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Password reset successful"
+            },
+            status=status.HTTP_200_OK,
         )
 
 

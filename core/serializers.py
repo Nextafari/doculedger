@@ -11,7 +11,7 @@ Covers:
 from rest_framework import serializers
 from django.utils import timezone
 
-from .models import (
+from core.models import (
     User,
     Role,
     Project,
@@ -24,7 +24,7 @@ from .models import (
     Notification,
     EncryptionMetadata,
 )
-
+from core.validators import validate_phonenumber
 
 # =============================================================================
 # User & Project Serializers
@@ -42,10 +42,39 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "email",
             "mobile",
+            "password",
             "is_active",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at", "is_active"]
+
+        extra_kwargs = {
+            "password": {"write_only": True},
+            "id": {"read_only": True},
+            "created_at": {"read_only": True},
+            "is_active": {"read_only": True},
+        }
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", None)
+
+        mobile = validated_data.get("mobile")
+        if mobile:
+            validate_phonenumber(mobile)
+
+        if not password:
+            raise serializers.ValidationError({"password": "Password is required."})
+
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """Serializer for resetting user password"""
+
+    email = serializers.EmailField()
+    new_password = serializers.CharField(write_only=True)
 
 
 class RoleSerializer(serializers.ModelSerializer):

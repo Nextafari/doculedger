@@ -98,7 +98,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=120, blank=True)
     last_name = models.CharField(max_length=120, blank=True)
     email = models.EmailField(unique=True)
-    mobile = models.CharField(max_length=32, blank=True, null=True)
+    mobile = models.CharField(max_length=32, blank=True, null=True, unique=True)
     last_login = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(default=now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -221,7 +221,7 @@ class EncryptionMetadata(models.Model):
     key_ref = models.CharField(
         max_length=512, blank=True, null=True
     )  # reference to KMS entry or key id
-    iv = models.CharField(max_length=128, blank=True, null=True)
+    iv = models.CharField(max_length=128, blank=True, null=True, help_text="Initialization Vector used for encryption")
     created_at = models.DateTimeField(default=now)
 
     def __str__(self):
@@ -365,6 +365,9 @@ class AuditEvent(models.Model):
     ref_id = models.UUIDField(blank=True, null=True)  # referenced entity id
     actor = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="audit_events"
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, related_name="audited_docs"
     )
     tx_hash = models.CharField(
         max_length=128, blank=True, null=True
