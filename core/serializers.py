@@ -45,7 +45,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "is_active"]
 
 
 class RoleSerializer(serializers.ModelSerializer):

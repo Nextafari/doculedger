@@ -67,10 +67,8 @@ schema_view = get_schema_view(
 urlpatterns = [
     # Admin
     path("admin/", admin.site.urls),
-
     # API v1 - Core endpoints
     path("api/", include("core.urls")),
-
     # API Documentation
     path(
         "swagger/",

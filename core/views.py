@@ -10,7 +10,7 @@ Sequence Diagram Flows:
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 
@@ -37,8 +37,40 @@ from .serializers import (
     ApproveDocumentSerializer,
     AuditEventSerializer,
     NotificationSerializer,
+    UserSerializer,
 )
 from .utils import HashService, IPFSService, RelayerService
+
+
+class UserRegistrationViewSet(viewsets.ViewSet):
+    """
+    User registration ViewSet.
+
+    Implements user registration flow.
+    """
+
+    permission_classes = [AllowAny]
+    serializer_class = UserSerializer
+
+    @action(detail=False, methods=["post"], url_path="register")
+    def register_user(self, request):
+        """
+        Register a new user.
+
+        Args:
+            request: HTTP request with user data
+
+        Returns:
+            Response with registration status
+        """
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {"message": "User registration not yet implemented"},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
+        )
 
 
 # =============================================================================

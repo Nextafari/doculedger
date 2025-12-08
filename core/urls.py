@@ -12,6 +12,11 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import DocumentViewSet, VerificationViewSet, ApprovalViewSet, AuditViewSet
 
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
 # Create router for ViewSets
 router = DefaultRouter()
 router.register(r"documents", DocumentViewSet, basename="document")
@@ -21,6 +26,8 @@ router.register(r"audit", AuditViewSet, basename="audit")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 ]
 
 # Available endpoints:
