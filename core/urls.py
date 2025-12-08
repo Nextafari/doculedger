@@ -19,6 +19,7 @@ from rest_framework_simplejwt.views import (
 
 # Create router for ViewSets
 router = DefaultRouter()
+router.register(r"users", include("core.user_urls"))
 router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"verification", VerificationViewSet, basename="verification")
 router.register(r"approvals", ApprovalViewSet, basename="approval")
