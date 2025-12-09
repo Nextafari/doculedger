@@ -27,7 +27,7 @@ from .views import (
 
 # Create router for ViewSets
 router = DefaultRouter()
-router.register(r"users", UserRegistrationViewSet, basename="user")
+router.register(r"users/registration", UserRegistrationViewSet, basename="user")
 router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"verification", VerificationViewSet, basename="verification")
 router.register(r"approvals", ApprovalViewSet, basename="approval")
