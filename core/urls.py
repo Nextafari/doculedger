@@ -21,18 +21,20 @@ from .views import (
     DocumentViewSet,
     ResetPasswordViewSet,
     VerificationViewSet,
+    UserViewSet,
     UserRegistrationViewSet,
 )
 
 
 # Create router for ViewSets
 router = DefaultRouter()
-router.register(r"users/registration", UserRegistrationViewSet, basename="user")
+router.register(r"user/registration", UserRegistrationViewSet, basename="user-registration")
+router.register(r"users", UserViewSet, basename="user-details")
 router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"verification", VerificationViewSet, basename="verification")
 router.register(r"approvals", ApprovalViewSet, basename="approval")
 router.register(r"audit", AuditViewSet, basename="audit")
-router.register(r"reset-password", ResetPasswordViewSet, basename="reset-password")
+router.register(r"", ResetPasswordViewSet, basename="reset-password")
 
 urlpatterns = [
     path("", include(router.urls)),

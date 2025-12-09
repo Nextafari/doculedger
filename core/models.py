@@ -165,14 +165,20 @@ class UserRole(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_role")
-    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="users_role")
+    role_permission = models.ForeignKey(
+        RolePermission,
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
+        related_name="users_role_permission"
+    )
     assigned_at = models.DateTimeField(default=now)
 
     class Meta:
-        unique_together = ("user", "role")
+        unique_together = ("user", "role_permission",)
 
     def __str__(self):
-        return f"{self.user.email} as {self.role.name}"
+        return f"{self.user.email} as {self.role_permission.role.name}"
 
 
 class Document(models.Model):

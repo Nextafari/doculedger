@@ -23,6 +23,7 @@ from core.models import (
     Activity,
     Notification,
     EncryptionMetadata,
+    UserRole,
 )
 from core.validators import validate_phonenumber
 
@@ -68,6 +69,34 @@ class UserSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+
+class UserDetailsSerializer(serializers.ModelSerializer):
+    """Serializer for detailed User model view"""
+    role = serializers.SerializerMethodField(method_name="get_user_role")
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "role",
+            "is_active",
+            "created_at",
+        ]
+
+    def get_user_role(self, obj):
+        user_role = UserRole.objects.select_related("role_permission").filter(user=obj).first()
+
+        try:
+            role_name = user_role.role_permission.role.name if user_role else None
+        except AttributeError:
+            role_name = None
+
+        return role_name
 
 
 class ResetPasswordSerializer(serializers.Serializer):

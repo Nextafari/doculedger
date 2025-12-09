@@ -43,49 +43,40 @@ from core.serializers import (
     AuditEventSerializer,
     NotificationSerializer,
     UserSerializer,
+    UserDetailsSerializer,
     ResetPasswordSerializer,
 )
 from core.utils import HashService, IPFSService, RelayerService
 
 
 class UserRegistrationViewSet(viewsets.ViewSet):
-    """
-    User registration ViewSet.
-
-    Implements user registration flow.
-    """
+    """Handle the standalone registration flow at /registration."""
 
     permission_classes = [AllowAny]
     serializer_class = UserSerializer
 
+    def _assign_owner_role(self, user: User) -> None:
+        """Ensure every registered owner user has the owner permission set."""
+        role, _ = Role.objects.get_or_create(
+            name="owner",
+            defaults={"description": "Workspace owner role"},
+        )
+        permission, _ = Permission.objects.get_or_create(
+            name="manage_workspace",
+            defaults={"description": "Full workspace management permission"},
+        )
+        role_permission, _ = RolePermission.objects.get_or_create(
+            role=role, permission=permission
+        )
+        UserRole.objects.get_or_create(user=user, role_permission=role_permission)
+
     @swagger_auto_schema(tags=["api"], request_body=serializer_class)
     def create(self, request):
-        """
-        Register a new user.
-
-        Args:
-            request: HTTP request with user data
-
-        Returns:
-            Response with registration status
-        """
         serializer = self.serializer_class(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
             user = serializer.save()
-
-            # Owner role/permission creation logic (only for direct registration)
-            role, _ = Role.objects.get_or_create(
-                name="owner",
-                defaults={"description": "Workspace owner role"},
-            )
-
-            permission, _ = Permission.objects.get_or_create(
-                name="manage_workspace",
-                defaults={"description": "Full workspace management permission"},
-            )
-            RolePermission.objects.get_or_create(role=role, permission=permission)
-            UserRole.objects.get_or_create(user=user, role=role)
+            self._assign_owner_role(user)
         except Exception as e:
             logger.error(f"User registration failed: {str(e)}")
             return Response(
@@ -100,6 +91,49 @@ class UserRegistrationViewSet(viewsets.ViewSet):
                 "data": serializer.data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class UserViewSet(viewsets.ViewSet):
+    """Read-only user endpoints exposed at /users/ and /user/details/<pk>."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserDetailsSerializer
+
+    @swagger_auto_schema(tags=["api"])
+    @action(detail=False, methods=["get"], url_path="details")
+    def user_data(self, request):
+        pk = request.user.pk
+
+        try:
+            user = User.objects.get(pk=pk)
+            serializer = self.serializer_class(user)
+        except User.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "User retrieved successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @swagger_auto_schema(tags=["api"])
+    def list(self, request):
+        users = User.objects.all()
+        serializer = self.serializer_class(users, many=True)
+        return Response(
+            {
+                "status": "success",
+                "message": "Users retrieved successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -652,3 +686,5 @@ class AuditViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(event_type=event_type)
 
         return queryset
+
+

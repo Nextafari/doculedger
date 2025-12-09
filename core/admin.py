@@ -34,7 +34,7 @@ class RolePermissionAdmin(admin.ModelAdmin):
 
 
 class UserRoleAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "role", "assigned_at")
+    list_display = ("id", "user", "role_permission__role__name", "assigned_at")
 
 
 class ProjectAdmin(admin.ModelAdmin):
