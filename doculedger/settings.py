@@ -215,6 +215,12 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
 }
 
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Token": {"type": "apiKey", "name": "Authorization", "in": "header"}
+    }
+}
+
 # =============================================================================
 # Custom User Model
 # =============================================================================
