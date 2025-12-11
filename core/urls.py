@@ -20,9 +20,11 @@ from .views import (
     ApprovalViewSet,
     DocumentViewSet,
     ResetPasswordViewSet,
+    RoleListView,
     VerificationViewSet,
     UserViewSet,
     UserRegistrationViewSet,
+    UserCreationView,
 )
 
 
@@ -37,6 +39,8 @@ router.register(r"audit", AuditViewSet, basename="audit")
 router.register(r"", ResetPasswordViewSet, basename="reset-password")
 
 urlpatterns = [
+    path("roles/", RoleListView.as_view(), name="roles-list"),
+    path("users/create/", UserCreationView.as_view(), name="user-create"),
     path("", include(router.urls)),
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

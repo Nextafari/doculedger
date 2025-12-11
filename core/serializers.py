@@ -14,6 +14,7 @@ from django.utils import timezone
 from core.models import (
     User,
     Role,
+    RolePermission,
     Project,
     Document,
     ApprovalRequest,
@@ -97,6 +98,36 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             role_name = None
 
         return role_name
+
+
+class UserInviteSerializer(serializers.Serializer):
+    """Serializer for creating users with a non-owner role."""
+
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=120)
+    last_name = serializers.CharField(max_length=120)
+    role_id = serializers.UUIDField(write_only=True)
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("User with this email already exists.")
+        return value
+
+    def validate_role_id(self, value):
+        try:
+            role = Role.objects.get(id=value)
+        except Role.DoesNotExist as exc:
+            raise serializers.ValidationError("Role not found.") from exc
+
+        if role.name.lower() == "owner":
+            raise serializers.ValidationError("Owner role cannot be assigned via this endpoint.")
+
+        role_permission_exists = RolePermission.objects.filter(role=role).exists()
+        if not role_permission_exists:
+            raise serializers.ValidationError("Selected role has no permissions configured.")
+
+        self.role_instance = role
+        return value
 
 
 class ResetPasswordSerializer(serializers.Serializer):

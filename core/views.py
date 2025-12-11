@@ -12,6 +12,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
 from django.utils import timezone
 from django.db import transaction
 
@@ -42,8 +43,10 @@ from core.serializers import (
     ApproveDocumentSerializer,
     AuditEventSerializer,
     NotificationSerializer,
+    RoleSerializer,
     UserSerializer,
     UserDetailsSerializer,
+    UserInviteSerializer,
     ResetPasswordSerializer,
 )
 from core.utils import HashService, IPFSService, RelayerService
@@ -69,7 +72,7 @@ class UserRegistrationViewSet(viewsets.ViewSet):
             role=role, permission=permission
         )
         UserRole.objects.get_or_create(user=user, role_permission=role_permission)
-
+    
     @swagger_auto_schema(tags=["api"], request_body=serializer_class)
     def create(self, request):
         serializer = self.serializer_class(data=request.data)
@@ -134,6 +137,80 @@ class UserViewSet(viewsets.ViewSet):
                 "data": serializer.data,
             },
             status=status.HTTP_200_OK,
+        )
+
+
+class RoleListView(APIView):
+    """Return all roles except the owner role."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        roles = Role.objects.exclude(name__iexact="owner").order_by("name")
+        serializer = RoleSerializer(roles, many=True)
+        return Response(
+            {
+                "status": "success",
+                "message": "Roles retrieved successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class UserCreationView(APIView):
+    """Create a user with the provided role assignment."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserInviteSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        role = getattr(serializer, "role_instance", None)
+        if role is None:
+            role = Role.objects.get(id=serializer.validated_data["role_id"])
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    email=serializer.validated_data["email"],
+                    first_name=serializer.validated_data["first_name"],
+                    last_name=serializer.validated_data["last_name"],
+                    password=None,
+                )
+
+                role_permission = (
+                    RolePermission.objects.filter(role=role).first()
+                    if role
+                    else None
+                )
+
+                if not role_permission:
+                    raise ValueError("Selected role has no permissions configured.")
+
+                UserRole.objects.get_or_create(
+                    user=user, role_permission=role_permission
+                )
+        except ValueError as exc:
+            return Response(
+                {"status": "error", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as exc:
+            logger.error(f"User creation failed: {str(exc)}")
+            return Response(
+                {"status": "error", "message": "Unable to create user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "User created successfully",
+                "data": UserDetailsSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
