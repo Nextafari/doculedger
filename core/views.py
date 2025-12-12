@@ -12,6 +12,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser
 from rest_framework.views import APIView
 from django.utils import timezone
 from django.db import transaction
@@ -273,6 +274,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
     queryset = Document.objects.all()
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
 
     def get_queryset(self):
         """Filter documents by project if specified"""
@@ -282,6 +284,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(project_id=project_id)
         return queryset
 
+    @swagger_auto_schema(tags=["documents"], request_body=DocumentUploadSerializer)
     @action(detail=False, methods=["post"], url_path="upload")
     def upload_document(self, request):
         """
