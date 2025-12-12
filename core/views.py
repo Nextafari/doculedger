@@ -7,6 +7,7 @@ Sequence Diagram Flows:
 3. Role-Based Approval: startApproval -> pending -> approve(A) -> pending -> approve(B) -> FullyApproved
 """
 
+from django.core.exceptions import ValidationError
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -886,8 +887,15 @@ class CreateProjectView(APIView):
 
     @swagger_auto_schema(tags=["api"])
     def get(self, request):
+        project_id = request.query_params.get("project_id")
+
         projects = Project.objects.all()
-        serializer = ProjectSerializer(projects, many=True)
+        if not project_id:
+            serializer = ProjectSerializer(projects, many=True)
+        else:
+            project = self.get_projects(project_id)
+            serializer = ProjectSerializer(project)
+
         return Response(
             {
                 "status": "success",
@@ -919,4 +927,73 @@ class CreateProjectView(APIView):
                 "data": serializer_class.data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class ProjectDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProjectSerializer
+
+    def get_project(self, pk):
+        if pk is None:
+            return Response(
+                {"status": "error", "message": "Project ID is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            project = Project.objects.get(pk=pk)
+        except (Project.DoesNotExist, ValidationError):
+            return Response(
+                {"status": "error", "message": "Project not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return project
+
+    @swagger_auto_schema(tags=["api"])
+    def get(self, request, pk):
+        project = self.get_project(pk)
+
+        if isinstance(project, Response):
+            return project
+
+        serializer = ProjectSerializer(project)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Projects retrieved successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @swagger_auto_schema(tags=["api"], request_body=serializer_class)
+    def patch(self, request, pk):
+        print("this is the value of pk:", pk)
+        project = self.get_project(pk)
+
+        if isinstance(project, Response):
+            return project
+
+        serializer = self.serializer_class(
+            project, data=request.data, partial=True
+        )
+        try:
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+        except Exception as e:
+            logger.error(f"Project update failed: {str(e)}")
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Project updated successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
         )
