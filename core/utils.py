@@ -8,8 +8,15 @@ Maps to sequence diagram components:
 """
 
 import hashlib
+import logging
+import os
 import uuid
+from pathlib import Path
 from typing import Dict, Any
+
+import boto3
+from botocore.exceptions import ClientError
+from django.conf import settings
 
 
 class HashService:
@@ -121,6 +128,66 @@ class IPFSService:
         # self.client.pin.add(cid)
         # return True
         return True
+
+
+class S3Service:
+    """Uploader backed by AWS S3 via boto3."""
+
+    def __init__(
+        self,
+        bucket_name: str | None = None,
+        region_name: str | None = None,
+        prefix: str = "documents",
+        fallback_dir: str | None = None,
+    ):
+        self.bucket_name = bucket_name or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+        self.region_name = region_name or getattr(settings, "AWS_REGION", None)
+        self.prefix = prefix.strip("/").strip() or "documents"
+        self.fallback_dir = fallback_dir or getattr(settings, "DOCUMENT_STORAGE_FALLBACK_DIR", "media/documents")
+        self.fallback_url = getattr(settings, "DOCUMENT_STORAGE_FALLBACK_URL", "/media/")
+        self.use_disk = self.bucket_name is None
+        if not self.use_disk:
+            self.client = boto3.client("s3", region_name=self.region_name)
+
+    def upload(self, file_bytes: bytes, filename: str, content_type: str | None = None) -> str:
+        """Upload bytes to S3 and return the public object URL."""
+
+        if self.use_disk:
+            return self._save_to_disk(file_bytes, filename)
+
+        key = f"{self.prefix}/{uuid.uuid4().hex}_{filename}"
+        extra_args = {}
+        if content_type:
+            extra_args["ContentType"] = content_type
+
+        try:
+            self.client.put_object(
+                Bucket=self.bucket_name, Key=key, Body=file_bytes, **extra_args
+            )
+        except ClientError as exc:
+            logger = logging.getLogger(__name__)
+            logger.error("Failed to upload to S3, falling back to disk: %s", exc)
+            return self._save_to_disk(file_bytes, filename)
+
+        base_url = (
+            f"https://{self.bucket_name}.s3.amazonaws.com/{key}"
+            if not self.region_name or self.region_name == "us-east-1"
+            else f"https://{self.bucket_name}.s3-{self.region_name}.amazonaws.com/{key}"
+        )
+        return base_url
+
+    def _save_to_disk(self, file_bytes: bytes, filename: str) -> str:
+        """Persist the file locally and return a URL similar to S3."""
+
+        base_path = Path(self.fallback_dir).resolve()
+        key = f"{self.prefix}/{uuid.uuid4().hex}_{filename}"
+        target_path = base_path / key
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_path, "wb") as fh:
+            fh.write(file_bytes)
+
+        public_url = os.path.join(self.fallback_url.rstrip("/"), key)
+        return public_url
 
 
 class RelayerService:

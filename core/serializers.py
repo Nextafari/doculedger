@@ -16,6 +16,7 @@ from core.models import (
     Role,
     RolePermission,
     Project,
+    ProjectMember,
     Document,
     ApprovalRequest,
     ApprovalRecord,
@@ -146,13 +147,40 @@ class RoleSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class ProjectMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectMember
+        fields = ["id", "user", "role", "joined_at"]
+        read_only_fields = ["id", "joined_at"]
+
+
+class CreateProjectSerializer(serializers.ModelSerializer):
     """Serializer for Project model"""
+    project_members = ProjectMemberSerializer(many=True, write_only=True)
 
     class Meta:
         model = Project
-        fields = ["id", "name", "description", "created_at"]
+        fields = ["id", "name", "description", "project_members", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+    def create(self, validated_data):
+        project_members_data = validated_data.pop("project_members", [])
+        project = Project.objects.create(**validated_data)
+
+        for member_data in project_members_data:
+            ProjectMember.objects.create(project=project, **member_data)
+
+        return project
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    """Serializer for Project model"""
+    project_members = ProjectMemberSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Project
+        fields = ["id", "name", "description", "project_members", "created_at"]
+        read_only_fields = ["id", "project_members", "created_at"]
 
 
 # =============================================================================
@@ -398,3 +426,10 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ["id", "user", "subject", "message", "is_read", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+
+class SetApproversSerializer(serializers.Serializer):
+    document_id = serializers.UUIDField()
+    approver_ids = serializers.ListField(
+        child=serializers.UUIDField(), min_length=1
+    )

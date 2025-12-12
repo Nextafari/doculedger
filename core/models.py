@@ -24,6 +24,18 @@ class Project(models.Model):
         return self.name
 
 
+class ProjectMember(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        "User", on_delete=models.CASCADE, related_name="project_member"
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="members"
+    )
+    role = models.CharField(max_length=128, blank=True, null=True)
+    joined_at = models.DateTimeField(default=now)
+
+
 class GasAddress(models.Model):
     """
     Represents a gas address for blockchain transactions.

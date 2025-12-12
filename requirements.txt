@@ -18,6 +18,9 @@ psycopg2==2.9.11
 # Blockchain / Web3 integration
 web3>=7.14.0
 
+# AWS & cloud integrations
+boto3>=1.32.0
+
 # IPFS integration
 ipfshttpclient>=0.7.0
 

@@ -47,9 +47,12 @@ from core.serializers import (
     UserSerializer,
     UserDetailsSerializer,
     UserInviteSerializer,
+    SetApproversSerializer,
     ResetPasswordSerializer,
+    CreateProjectSerializer,
+    ProjectSerializer,
 )
-from core.utils import HashService, IPFSService, RelayerService
+from core.utils import HashService, IPFSService, RelayerService, S3Service
 
 
 class UserRegistrationViewSet(viewsets.ViewSet):
@@ -158,12 +161,13 @@ class RoleListView(APIView):
         )
 
 
-class UserCreationView(APIView):
+class AdminCreateUserView(APIView):
     """Create a user with the provided role assignment."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = UserInviteSerializer
 
+    @swagger_auto_schema(tags=["api"], request_body=serializer_class)
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -325,9 +329,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
             ipfs_service = IPFSService()
             ipfs_cid = ipfs_service.add(file_bytes)
 
-            # Update document with hash and CID
+            # Step 4: S3 upload
+            s3_service = S3Service()
+            s3_url = s3_service.upload(
+                file_bytes, original_filename, content_type=getattr(uploaded_file, "content_type", None)
+            )
+
+            # Update document with storage metadata
             document.sha256_hash = sha256_hash
             document.cid = ipfs_cid
+            document.s3_url = s3_url
             document.status = "uploaded"
             document.save()
 
@@ -365,6 +376,11 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
             # Log activity
             if uploader:
+                Notification.objects.create(
+                    user=uploader,
+                    subject="Document uploaded",
+                    message=f"{document.original_filename} has been uploaded and stored (status: {document.status}).",
+                )
                 Activity.objects.create(
                     user=uploader,
                     activity_type="document_upload",
@@ -382,6 +398,99 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_201_CREATED,
             )
+
+    @swagger_auto_schema(tags=["api"], request_body=SetApproversSerializer)
+    @action(detail=False, methods=["post"], url_path="set-approvers")
+    def set_approvers(self, request):
+        serializer = SetApproversSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        document_id = serializer.validated_data["document_id"]
+        approver_ids = serializer.validated_data["approver_ids"]
+
+        try:
+            document = Document.objects.select_related("uploader").get(id=document_id)
+        except Document.DoesNotExist:
+            return Response(
+                {"status": "error", "message": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        users = list(User.objects.filter(id__in=approver_ids))
+        approver_map = {user.id: user for user in users}
+        missing_ids = [uid for uid in approver_ids if uid not in approver_map]
+
+        if missing_ids:
+            return Response(
+                {"status": "error", "message": "One or more approvers not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        approvers = [approver_map[uid] for uid in approver_ids]
+
+        creator = (
+            request.user if hasattr(request, "user") and isinstance(request.user, User) else None
+        )
+
+        with transaction.atomic():
+            approval_request = ApprovalRequest.objects.create(
+                document=document,
+                creator=creator,
+                route_json={
+                    "approvers": [str(uid) for uid in approver_ids],
+                },
+                current_step=0,
+                status="pending",
+            )
+
+            for idx, approver in enumerate(approvers):
+                user_role = (
+                    approver.user_role.select_related("role_permission__role").first()
+                )
+                role = (
+                    user_role.role_permission.role
+                    if user_role and user_role.role_permission
+                    else None
+                )
+
+                ApprovalRecord.objects.create(
+                    request=approval_request,
+                    document=document,
+                    approver=approver,
+                    role=role,
+                    step_index=idx,
+                )
+
+                Notification.objects.create(
+                    user=approver,
+                    subject="Approval Assignment",
+                    message=(
+                        f"You have been added as an approver for document "
+                        f"{document.original_filename}."
+                    ),
+                )
+
+            document.status = "pending"
+            document.save(update_fields=["status"])
+
+            if document.uploader:
+                Notification.objects.create(
+                    user=document.uploader,
+                    subject="Approver assignment",
+                    message=(
+                        f"{len(approvers)} approvers have been assigned to "
+                        f"{document.original_filename}."
+                    ),
+                )
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Approvers set successfully",
+                "document": DocumentSerializer(document).data,
+                "approval_request": ApprovalRequestSerializer(approval_request).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # =============================================================================
@@ -765,3 +874,47 @@ class AuditViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
+class CreateProjectView(APIView):
+    """
+    View to create a new project.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = CreateProjectSerializer
+    queryset_data = Project.objects.all()
+
+    @swagger_auto_schema(tags=["api"])
+    def get(self, request):
+        projects = self.queryset_data
+        serializer = ProjectSerializer(projects, many=True)
+        return Response(
+            {
+                "status": "success",
+                "message": "Projects retrieved successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @swagger_auto_schema(tags=["api"], request_body=serializer_class)
+    def post(self, request):
+        serializer_class = self.serializer_class(data=request.data)
+
+        try:
+            serializer_class.is_valid(raise_exception=True)
+        except Exception as e:
+            logger.error(f"Project creation failed: {str(e)}")
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer_class.save()
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Project created successfully",
+                "data": serializer_class.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )

@@ -6,6 +6,7 @@ from .models import (
     RolePermission,
     UserRole,
     Project,
+    ProjectMember,
     Document,
     ApprovalRequest,
     ApprovalRecord,
@@ -39,6 +40,10 @@ class UserRoleAdmin(admin.ModelAdmin):
 
 class ProjectAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "description", "created_at")
+
+
+class ProjectMemberAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "project", "role", "joined_at")
 
 
 class DocumentAdmin(admin.ModelAdmin):
@@ -84,6 +89,7 @@ admin.site.register(Permission, PermissionAdmin)
 admin.site.register(RolePermission, RolePermissionAdmin)
 admin.site.register(UserRole, UserRoleAdmin)
 admin.site.register(Project, ProjectAdmin)
+admin.site.register(ProjectMember, ProjectMemberAdmin)
 admin.site.register(Document, DocumentAdmin)
 admin.site.register(ApprovalRequest, ApprovalRequestAdmin)
 admin.site.register(ApprovalRecord, ApprovalRecordAdmin)

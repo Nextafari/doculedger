@@ -16,6 +16,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from .views import (
+    AdminCreateUserView,
     AuditViewSet,
     ApprovalViewSet,
     DocumentViewSet,
@@ -24,7 +25,7 @@ from .views import (
     VerificationViewSet,
     UserViewSet,
     UserRegistrationViewSet,
-    UserCreationView,
+    CreateProjectView,
 )
 
 
@@ -39,11 +40,12 @@ router.register(r"audit", AuditViewSet, basename="audit")
 router.register(r"", ResetPasswordViewSet, basename="reset-password")
 
 urlpatterns = [
-    path("roles/", RoleListView.as_view(), name="roles-list"),
-    path("users/create/", UserCreationView.as_view(), name="user-create"),
     path("", include(router.urls)),
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("roles/", RoleListView.as_view(), name="roles-list"),
+    path("admin/create/users/", AdminCreateUserView.as_view(), name="user-create"),
+    path("projects/", CreateProjectView.as_view(), name="project-create"),
 ]
 
 # Available endpoints:
