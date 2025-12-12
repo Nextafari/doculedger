@@ -175,12 +175,15 @@ class CreateProjectSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     """Serializer for Project model"""
-    project_members = ProjectMemberSerializer(many=True, read_only=True)
+    project_members = serializers.SerializerMethodField(method_name="get_project_members")
 
     class Meta:
         model = Project
         fields = ["id", "name", "description", "project_members", "created_at"]
         read_only_fields = ["id", "project_members", "created_at"]
+
+    def get_project_members(self, obj):
+        return ProjectMemberSerializer(obj.members.all(), many=True).data
 
 
 # =============================================================================
