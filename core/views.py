@@ -883,11 +883,10 @@ class CreateProjectView(APIView):
     """
     permission_classes = [IsAuthenticated]
     serializer_class = CreateProjectSerializer
-    queryset_data = Project.objects.all()
 
     @swagger_auto_schema(tags=["api"])
     def get(self, request):
-        projects = self.queryset_data
+        projects = Project.objects.all()
         serializer = ProjectSerializer(projects, many=True)
         return Response(
             {
