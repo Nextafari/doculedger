@@ -27,6 +27,7 @@ from .views import (
     UserRegistrationViewSet,
     CreateProjectView,
     ProjectDetailView,
+    NotificationView,
 )
 
 
@@ -48,6 +49,7 @@ urlpatterns = [
     path("admin/create/users/", AdminCreateUserView.as_view(), name="user-create"),
     path("projects/", CreateProjectView.as_view(), name="project-create"),
     path("projects/<str:pk>/", ProjectDetailView.as_view(), name="project-detail"),
+    path("notifications/", NotificationView.as_view(), name="notifications"),
 ]
 
 # Available endpoints:

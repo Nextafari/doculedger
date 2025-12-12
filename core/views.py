@@ -997,3 +997,26 @@ class ProjectDetailView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class NotificationView(APIView):
+    """
+    View to retrieve user notifications.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotificationSerializer
+
+    @swagger_auto_schema(tags=["notifications"])
+    def get(self, request):
+        user = request.user
+        notifications = Notification.objects.filter(user=user).order_by('-created_at')
+        serializer = self.serializer_class(notifications, many=True)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Notifications retrieved successfully",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
