@@ -57,6 +57,79 @@ from core.serializers import (
 from core.utils import HashService, IPFSService, RelayerService, S3Service
 
 
+def _get_ordered_objects(model_cls, ids):
+    """Return model instances ordered as ids along with any missing ids."""
+    if not ids:
+        return [], []
+
+    normalized_ids = [str(_id) for _id in ids]
+    objects = model_cls.objects.filter(id__in=normalized_ids)
+    object_map = {str(obj.id): obj for obj in objects}
+
+    ordered = []
+    missing = []
+    for raw_id in normalized_ids:
+        instance = object_map.get(raw_id)
+        if instance is None:
+            missing.append(raw_id)
+        else:
+            ordered.append(instance)
+    return ordered, missing
+
+
+def _resolve_user_role(user):
+    assignment = user.user_role.select_related("role_permission__role").first()
+    if assignment and assignment.role_permission:
+        return assignment.role_permission.role
+    return None
+
+
+def _ensure_approval_records(approval_request, users, roles=None):
+    """Create approval records for users that do not yet have one."""
+    if not users:
+        return []
+
+    existing_ids = {
+        str(approver_id)
+        for approver_id in approval_request.approval_records.values_list(
+            "approver_id", flat=True
+        )
+        if approver_id
+    }
+
+    document = approval_request.document
+    created_records = []
+
+    for idx, user in enumerate(users):
+        if str(user.id) in existing_ids:
+            continue
+
+        role = None
+        if roles and idx < len(roles):
+            role = roles[idx]
+        if role is None:
+            role = _resolve_user_role(user)
+
+        record = ApprovalRecord.objects.create(
+            request=approval_request,
+            document=document,
+            approver=user,
+            role=role,
+            step_index=idx,
+        )
+        Notification.objects.create(
+            user=user,
+            subject="Approval Assignment",
+            message=(
+                f"You have been added as an approver for document "
+                f"{document.original_filename}."
+            ),
+        )
+        created_records.append(record)
+
+    return created_records
+
+
 class UserRegistrationViewSet(viewsets.ViewSet):
     """Handle the standalone registration flow at /registration."""
 
@@ -420,16 +493,13 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        users = list(User.objects.filter(id__in=approver_ids))
-        approver_map = {user.id: user for user in users}
-        missing_ids = [uid for uid in approver_ids if uid not in approver_map]
+        approvers, missing_ids = _get_ordered_objects(User, approver_ids)
 
         if missing_ids:
             return Response(
                 {"status": "error", "message": "One or more approvers not found"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        approvers = [approver_map[uid] for uid in approver_ids]
 
         creator = (
             request.user if hasattr(request, "user") and isinstance(request.user, User) else None
@@ -446,30 +516,15 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 status="pending",
             )
 
-            for idx, approver in enumerate(approvers):
-                user_role = (
-                    approver.user_role.select_related("role_permission__role").first()
-                )
-                role = (
-                    user_role.role_permission.role
-                    if user_role and user_role.role_permission
-                    else None
-                )
+            _ensure_approval_records(approval_request, approvers)
 
-                ApprovalRecord.objects.create(
-                    request=approval_request,
-                    document=document,
-                    approver=approver,
-                    role=role,
-                    step_index=idx,
-                )
-
+            if creator:
                 Notification.objects.create(
-                    user=approver,
-                    subject="Approval Assignment",
+                    user=creator,
+                    subject="Approval Request Created",
                     message=(
-                        f"You have been added as an approver for document "
-                        f"{document.original_filename}."
+                        f"Approval workflow for {document.original_filename} "
+                        "has been created."
                     ),
                 )
 
@@ -654,11 +709,10 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 {"error": "Document not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        # Validate approvers and roles exist
-        approvers = User.objects.filter(id__in=approver_ids)
-        roles = Role.objects.filter(id__in=role_ids)
+        approvers, missing_users = _get_ordered_objects(User, approver_ids)
+        roles, missing_roles = _get_ordered_objects(Role, role_ids)
 
-        if len(approvers) != 2 or len(roles) != 2:
+        if missing_users or missing_roles:
             return Response(
                 {"error": "Must provide exactly 2 valid approvers and 2 valid roles"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -683,14 +737,16 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 status="pending",
             )
 
-            # Create approval records for each approver
-            for idx, (approver, role) in enumerate(zip(approvers, roles)):
-                ApprovalRecord.objects.create(
-                    request=approval_request,
-                    document=document,
-                    approver=approver,
-                    role=role,
-                    step_index=idx,
+            _ensure_approval_records(approval_request, approvers, roles)
+
+            if creator:
+                Notification.objects.create(
+                    user=creator,
+                    subject="Approval Request Created",
+                    message=(
+                        f"Approval workflow for {document.original_filename} "
+                        "has been created."
+                    ),
                 )
 
             # Log audit event
@@ -705,14 +761,6 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                     "roles": [role.name for role in roles],
                 },
             )
-
-            # Send notifications to approvers
-            for approver in approvers:
-                Notification.objects.create(
-                    user=approver,
-                    subject="Approval Request",
-                    message=f"You have been assigned to approve document: {document.original_filename}",
-                )
 
             return Response(
                 {
@@ -746,6 +794,37 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        route = approval_request.route_json or {}
+        route_approvers = route.get("approvers") or []
+        route_roles = route.get("roles") or []
+
+        if route_approvers:
+            ordered_users, missing_route_users = _get_ordered_objects(
+                User, route_approvers
+            )
+            if missing_route_users:
+                return Response(
+                    {"error": "Approval route references unknown users"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            ordered_roles = None
+            if route_roles:
+                ordered_roles, missing_route_roles = _get_ordered_objects(
+                    Role, route_roles
+                )
+                if missing_route_roles:
+                    return Response(
+                        {"error": "Approval route references unknown roles"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            _ensure_approval_records(
+                approval_request,
+                ordered_users,
+                ordered_roles,
+            )
+
         approver = (
             request.user
             if hasattr(request, "user") and isinstance(request.user, User)
@@ -767,13 +846,15 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        role_name = approval_record.role.name if approval_record.role else "unassigned"
+
         with transaction.atomic():
             # Submit meta-transaction to blockchain
             relayer_service = RelayerService()
             tx_result = relayer_service.approve_document(
                 document_id=str(approval_request.document.id),
                 approver_address=approver.email if approver else "system",
-                role=approval_record.role.name,
+                role=role_name,
             )
 
             # Create blockchain transaction record
@@ -824,7 +905,7 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 details_json={
                     "approval_request_id": str(approval_request.id),
                     "document_id": str(approval_request.document.id),
-                    "role": approval_record.role.name,
+                    "role": role_name,
                     "step": approval_record.step_index,
                     "remarks": remarks,
                     "is_final": approval_request.status == "completed",

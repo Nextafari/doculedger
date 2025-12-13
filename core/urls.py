@@ -43,8 +43,8 @@ router.register(r"", ResetPasswordViewSet, basename="reset-password")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("roles/", RoleListView.as_view(), name="roles-list"),
     path("admin/create/users/", AdminCreateUserView.as_view(), name="user-create"),
     path("projects/", CreateProjectView.as_view(), name="project-create"),
